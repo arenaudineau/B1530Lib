@@ -1,4 +1,4 @@
-# !! Required to add to path the B1530driver files !!
+# !! Required to add B1530driver files to path !!
 
 try:
 	from B1530driver import *
