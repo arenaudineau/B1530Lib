@@ -72,7 +72,7 @@ class Waveform:
 		Appends a delay after the waveform.
 
 		Parameters:
-			new_total_duration: float : The new total duration of the waveform afterward, must be greater than current total duration
+			new_total_duration: float : The new total duration of the waveform, must be greater than current total duration
 			wait_time: float : Delay to append to the waveform
 
 		Details:
@@ -86,10 +86,35 @@ class Waveform:
 		else:
 			delay = wait_time
 
-		if delay <= 0:
+		if delay < 0:
 			raise ValueError("Delay to append is negative")
 
 		self.pattern.append([delay, 0])
+		return self
+
+	def prepend_wait_begin(self, new_total_duration = None, wait_time = None):
+		"""
+		Prepends a delay before the waveform.
+		
+		Parameters:
+			new_total_duration: float : The new total duration of the waveform, must be greater than current total duration
+			wait_time: float : Delay to prepend to the waveform
+
+		Details:
+			One and only one of the new_total_duration or wait_time must be provided
+		"""
+		if new_total_duration is None == wait_time is None:
+			raise ValueError("One and only one of new_total_duration or wait_time expected")
+
+		if new_total_duration is not None:
+			delay = new_total_duration - self.get_total_duration()
+		else:
+			delay = wait_time
+
+		if delay < 0:
+			raise ValueError("Delay to append is negative")
+
+		self.pattern.insert(0, [delay, 0])
 		return self
 	
 	def measure(self, start_delay = 0, ignore_gnd=False, ignore_edges=True, ignore_settling=True, **kwargs):
