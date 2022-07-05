@@ -1,0 +1,14 @@
+# Python/Notebook generated files
+__pycache__/
+*.pyc
+*-checkpoint.*
+tmp_env/
+*.egg-info
+build/
+dist/
+
+# VS Code files
+.vscode
+
+# This folder contains proprietary code
+**/extlibs/B1530Driver/B1530*
