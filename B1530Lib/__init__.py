@@ -799,7 +799,7 @@ class B1530:
 				voltage_pattern = filtered_wf.get_voltage_pattern()
 
 				self.d_addVectors(self.pattern_name[i], time_pattern, voltage_pattern, len(time_pattern))
-			else:
+			elif len(filtered_wf.pattern) == 1:
 				self.d_addVector(self.pattern_name[i], filtered_wf.pattern[0][0], filtered_wf.pattern[0][1])
 
 			# Configure meas
