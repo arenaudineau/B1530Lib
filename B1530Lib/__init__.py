@@ -838,12 +838,14 @@ class B1530:
 			self.d_connect(channel.id)
 			
 
-	def exec(self, concat_repetitions=False):
+	def exec(self, concat_repetitions=False, wait_until_completed=True):
 		"""
 		Executes the WGFMUs patterns (waveform generation and/or measurements)
 		
 		Parameters:
-			concat_repetitions: bool : Concat, or keep in an array, the different measurements results associated to the repetitions
+			concat_repetitions: bool : Concat, or keep in an array, the different measurements results associated to the repetitions [False by default]
+			wait_until_completed: bool : Wait until all the execution and measurements are completed [True by default]
+				Details: ⚠️ If False, measurements are not retrieved
 
 		Details:
 			Executes the patterns and store the measurement results in chan[i].meas.result
@@ -856,39 +858,41 @@ class B1530:
 			return
 
 		self.d_execute()
-		self.d_waitUntilCompleted()
+		
+		if wait_until_completed:
+			self.d_waitUntilCompleted()
 
-		meas_chan = self.get_meas_chans()
-		if len(meas_chan) == 0: # If there is no channel measuring, we stop here
-			return
+			meas_chan = self.get_meas_chans()
+			if len(meas_chan) == 0: # If there is no channel measuring, we stop here
+				return
 
-		for channel in meas_chan.values():
-			meas_count = channel.meas.get_count()
-			data = [] # [pd.DataFrame]
+			for channel in meas_chan.values():
+				meas_count = channel.meas.get_count()
+				data = [] # [pd.DataFrame]
 
-			time, meas = self.d_getMeasureValues(channel.id, 0, meas_count * pattern_count)
+				time, meas = self.d_getMeasureValues(channel.id, 0, meas_count * pattern_count)
 
-			for i in range(pattern_count):
-				start_id = meas_count * i
-				end_id   = start_id + meas_count
+				for i in range(pattern_count):
+					start_id = meas_count * i
+					end_id   = start_id + meas_count
 
-				df = pd.DataFrame()
+					df = pd.DataFrame()
 
-				# datasheet tells for d_getMeasureValues:
-				# "For the averaging measurement which takes multiple data for one point measurement, the returned [time] will be (start_time + stop_time) / 2"
-				# We instead use only the start time in order to gather measurements with different average_time
-				df['time' + channel.name] = list(map(lambda t: t - channel.meas.average_time / 2, time[start_id:end_id]))
-				df[channel.name]          = meas[start_id:end_id]
+					# datasheet tells for d_getMeasureValues:
+					# "For the averaging measurement which takes multiple data for one point measurement, the returned [time] will be (start_time + stop_time) / 2"
+					# We instead use only the start time in order to gather measurements with different average_time
+					df['time' + channel.name] = list(map(lambda t: t - channel.meas.average_time / 2, time[start_id:end_id]))
+					df[channel.name]          = meas[start_id:end_id]
 
-				df.drop(channel.meas.ignore_sample, inplace = True) # Drop the ignored samples
-				df.reset_index(drop = True, inplace = True)
-				data.append(df)
+					df.drop(channel.meas.ignore_sample, inplace = True) # Drop the ignored samples
+					df.reset_index(drop = True, inplace = True)
+					data.append(df)
 
-			if concat_repetitions:
-				data = pd.concat(data)
-				data.reset_index(drop = True, inplace = True)
-			
-			channel.meas.result = data if len(data) > 1 else data[0]
+				if concat_repetitions:
+					data = pd.concat(data)
+					data.reset_index(drop = True, inplace = True)
+				
+				channel.meas.result = data if len(data) > 1 else data[0]
 
 	def get_result(self, *args):
 		"""
