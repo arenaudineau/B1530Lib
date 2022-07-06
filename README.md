@@ -17,7 +17,7 @@ You must add their path to the environment variable PYTHONPATH. See the end of t
 You can now use `B1530Lib` as a regular library, by using `import B1530Lib` in any directory on the computer.
 
 ### Extending the driver
-You need to create a fork of this repo, ̀git clone` your fork onto your local computer and run `pip install -e .` in the root of the downloaded folder.  
+You need to create a fork of this repo, `git clone` your fork onto your local computer and run `pip install -e .` in the root of the downloaded folder.  
 You can know use `B1530Lib` in any directory of the computer and any changes in the sources will be taken into account. 
 
 ### Adding path to PYTHONPATH
