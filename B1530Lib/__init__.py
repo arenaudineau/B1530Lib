@@ -734,11 +734,19 @@ class B1530:
 
 		self._repeat = 0
 
-		self.d_openSession(addr)
+		self._init_success = True
+		try:
+			self.d_openSession(addr)
+		except Exception as e:
+			self._init_success = False
+			raise e
 
 	def __del__(self):
-		self.d_initialize()
-		self.d_closeSession()
+		if self._init_success: # Only if everything went fine
+			self.d_initialize()
+			self.d_closeSession()
+
+			self._init_success = False # We are not initialized anymore
 
 	def get_active_chans(self):
 		"""Returns the list of active channels i.e. that either generates a wave or make a measurement or both."""
