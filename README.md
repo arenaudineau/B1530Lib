@@ -21,7 +21,9 @@ You need to create a fork of this repo, `git clone` your fork onto your local co
 You can know use `B1530Lib` in any directory of the computer and any changes in the sources will be taken into account. 
 
 ### Adding path to PYTHONPATH
-TODO
+`Win + R` -> Write "SystemPropertiesAdvanced", Enter => Environment Variables... => User Variables for XXX ;  
+If `PYTHONPATH` exists, edit it and append the path to B1530driver files ;  
+Otherwise, create it.
 
 # Wiki
 Here is a complete [wiki](../../wiki) on how to use this library.
