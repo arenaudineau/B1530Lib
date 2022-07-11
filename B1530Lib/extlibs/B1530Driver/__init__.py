@@ -4,7 +4,7 @@ try:
 	from B1530driver import *
 	import B1530driver # for global variables
 except ModuleNotFoundError:
-	raise ModuleNotFoundError("Failed to import B1530driver. Please make sure that the B1530driver files are in 'extlibs/B1530Driver'.")
+	raise ModuleNotFoundError("Failed to import B1530driver. Please make sure to add B1530driver folder to PYTHONPATH.")
 else:
 	# Constants export
 	_operationMode       = B1530driver._operationMode
