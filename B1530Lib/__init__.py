@@ -272,7 +272,7 @@ class Waveform:
 	def get_min_abs_voltage(self):
 		return ft.reduce(lambda a, b: a if abs(a[1]) < abs(b[1]) else b, self.pattern)[1]
 
-	def get_filtered(self):
+	def get_cleansed(self):
 		"""
 		Returns a new Waveform whose pattern does not include points with zero time/delay
 
@@ -812,7 +812,10 @@ class B1530:
 
 			# Configure meas
 			meas = channel.meas
+			operation_mode = None
 			if meas is not None:
+				operation_mode = B1530Driver._operationMode['fastiv'] # If we have a measurement, we can only use fastiv mode
+
 				meas_event_name = 'MeasEvent' + str(i)
 				start_delay = meas.start_delay
 				self.d_setMeasureEvent(
@@ -824,12 +827,14 @@ class B1530:
 					meas.average_time,
 					B1530Driver._measureEventData['averaged']
 				)
+			else:
+				operation_mode = B1530Driver._operationMode['pg'] if not wf.force_fastiv else B1530Driver._operationMode['fastiv']
 
 			# Link config to the chan
 			self.d_addSequence(channel.id, self.pattern_name[i], self._repeat + 1)
 
 			# Connect and configure wgfmu hardware
-			self.d_setOperationMode(channel.id, B1530Driver._operationMode['fastiv'])
+			self.d_setOperationMode(channel.id, operation_mode)
 
 			if meas is not None:
 				mode = channel.meas.mode
@@ -971,3 +976,4 @@ class B1530:
 					result[res_idx] = pd.merge_asof(result[res_idx], renamed, on = 'time', direction='nearest', tolerance=1e-8) # 1e-8s == 10ns is the shortest time scale the B1530 can handle
 
 		return result if len(result) > 1 else result[0]
+		
