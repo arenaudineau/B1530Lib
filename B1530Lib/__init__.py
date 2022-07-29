@@ -29,9 +29,11 @@ class Waveform:
 	
 	Attributes:
 		pattern: [[Delta Time (s), Voltage (V)], ...] : pattern used to generate the waveform
+		force_fastiv: bool : Force FastIV pulse mode instead of PG even when no measurement is done [False, by default]
 	"""
 	def __init__(self, pattern = [[0,0]]):
 		self.pattern = pattern
+		self.force_fastiv = False
 	
 	def append(self, other):
 		"""Append another waveform to self. Returns self in order to chain the calls"""
@@ -142,7 +144,7 @@ class Waveform:
 			#  last_v---■___________________■/     ¦                 ¦      |           #
 			#           ^                   ^      ^                 ^      -           #
 			#           ¦<----------------->¦<-t ->¦                 ¦                  #
-			#   ________|when two consecut. ¦      ¦<------------è-->¦                  #
+			#   ________|when two consecut. ¦      ¦<--------------->¦                  #
 			#  /v == 0, ignore_gnd?         ¦      | ignore_settling? \                 #
 			#                               |      |_______                             #
 			#                               |ignore_edges? \                            #
@@ -801,7 +803,7 @@ class B1530:
 			# Configure waves
 			wf = channel.wave
 			self.d_createPattern(self.pattern_name[i], wf.pattern[0][1])
-			filtered_wf = wf.get_filtered()
+			filtered_wf = wf.get_cleansed()
 			if len(filtered_wf.pattern) > 1:
 				time_pattern    = filtered_wf.get_time_pattern()
 				voltage_pattern = filtered_wf.get_voltage_pattern()
