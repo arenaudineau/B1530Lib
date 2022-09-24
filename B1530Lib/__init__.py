@@ -322,7 +322,7 @@ class Pulse(Waveform):
 			if wait_begin is not None or wait_end is not None:
 				raise ValueError("Either interval or wait_begin/end expected, both got provided")
 
-		self.pattern = [[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]
+		super().__init__([[0, 0], [0, 0], [0, 0], [0, 0], [0, 0]])
 		
 		self.voltage  = voltage
 		self.edges    = edges
@@ -503,7 +503,7 @@ class DC(Waveform):
 	"""
 
 	def __init__(self, voltage):
-		self.pattern = [[0,0]]
+		super().__init__()
 		self.voltage = voltage
 
 	@property
@@ -553,6 +553,8 @@ class Step(Waveform):
 			'end_voltage':  end_voltage,
 			'end_reset':    end_reset,
 		}
+		
+		super().__init__() # pattern will be overriden by self.__gen()
 
 		for name, val in attributes.items():
 			def gen_get(attr_name):
