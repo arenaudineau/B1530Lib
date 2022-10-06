@@ -932,12 +932,13 @@ class B1530:
 			if pattern_count is None:
 				pattern_count = 1 if isinstance(res, pd.DataFrame) else len(res)
 			else:
+				base_err_msg = f"Incompatible measurement pattern count ({pattern_count}) with channel '{meas_chan.name}'"
 				# I do not really know how that could happen but at least we would get a nice error message
 				if isinstance(res, pd.DataFrame):
 					if pattern_count != 1:
-						raise ValueError(f"Incompatible measurement pattern count ({pattern_count}) with channel '{meas_chan.name}' (1)")
+						raise ValueError(base_err_msg + "(1)")
 				elif len(res) != pattern_count:
-					raise ValueError(f"Incompatible measurement pattern count ({pattern_count}) with channel '{meas_chan.name}' ({len(res)})")
+					raise ValueError(base_err_msg + f"({len(res)})")
 
 		result = [None for _ in range(pattern_count)]
 		chans  = [None for _ in range(len(args))]
