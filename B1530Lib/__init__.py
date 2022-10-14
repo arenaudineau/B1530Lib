@@ -2,11 +2,13 @@ from B1530Lib.extlibs import B1530Driver
 from B1530Lib.extlibs.stderr_redirect import stderr_redirector
 import pyvisa as visa
 
+import numpy as np
 import pandas as pd
 
 import io
 import copy as cp
 import functools as ft
+from math import ceil
 
 ################
 # Utils function
@@ -29,11 +31,11 @@ class Waveform:
 	
 	Attributes:
 		pattern: [[Delta Time (s), Voltage (V)], ...] : pattern used to generate the waveform
-		force_fastiv: bool : Force FastIV pulse mode instead of PG even when no measurement is done [False, by default]
+		force_fastiv: bool : Force FastIV pulse mode instead of PG even when no measurement is done [True, by default]
 	"""
 	def __init__(self, pattern = [[0,0]]):
 		self.pattern = pattern
-		self.force_fastiv = False
+		self.force_fastiv = True
 	
 	def append(self, other):
 		"""Append another waveform to self. Returns self in order to chain the calls"""
@@ -119,12 +121,13 @@ class Waveform:
 		self.pattern.insert(0, [delay, 0])
 		return self
 	
-	def measure(self, start_delay = 0, ignore_gnd=False, ignore_edges=True, ignore_settling=True, **kwargs):
+	def measure(self, start_delay = 0, forced_settle_time=None, ignore_gnd=False, ignore_edges=True, ignore_settling=True, **kwargs):
 		"""
 		Creates a measurement with the provided parameters adapted to the waveform.
 		
 		Parameters:
 			**kwargs, start_delay : default parameters required to construct B1530Lib.Measurement ;
+			forced_settle_time: float : Set the settle time instead of using the datasheet's values [Optional]
 			ignore_gnd:     bool : Whether to ignore (when retrieving the measurements) the measurement samples when the waveform voltage is zero ;
 			ignore_edges:   bool : Whether to ignore the meas. samples when the wave is rising or falling
 			ignore_settling: bool : Whether to ignore the meas. samples during the settling time of the B1530
@@ -158,86 +161,69 @@ class Waveform:
 		"""
 		kwargs.setdefault('duration', self.get_total_duration() - start_delay)
 
-		meas = Measurement(**kwargs)
+		meas = Measurement(start_delay=start_delay, **kwargs)
 
 		# From B1530A datasheet
 		settling_time = 0
-		if meas.mode == 'voltage':
-			settling_time = {
-				'5V':  85e-9,
-				'10V': 110e-9,
-			}[meas.range]
 
-		elif meas.mode == 'current':
-			settling_time = {
-				'1uA':   37e-6,
-				'10uA':  5.8e-6,
-				'100uA': 820e-9,
-				'1mA':   200e-9,
-				'10mA':  125e-9,
-			}[meas.range]
-		# else:
-		# 	Unknown mode, self.configure will raise except for us		
+		if forced_settle_time is not None:
+			settling_time = forced_settle_time
+		else:
+			if meas.mode == 'voltage':
+				settling_time = {
+					'5V':  85e-9,
+					'10V': 110e-9,
+				}[meas.range]
 
-		start_edge_time = None
-		current_time = 0
-		for i in range(len(self.pattern) - 1):
-			duration, v = self.pattern[i]
-			next_duration, next_v = self.pattern[i+1]
-			
-			current_time += duration
+			elif meas.mode == 'current':
+				settling_time = {
+					'1uA':   37e-6,
+					'10uA':  5.8e-6,
+					'100uA': 820e-9,
+					'1mA':   200e-9,
+					'10mA':  125e-9,
+				}[meas.range]	
 
-			### IGNORE_EDGES/SETTING ###
-			if (ignore_edges or ignore_settling) and abs(next_v - v) > 0.01 and start_edge_time is None: # Voltage change
-				start_edge_time = current_time
+		settling_sample_count = ceil(settling_time / meas.sample_interval)
 
-			if abs(next_v - v) < 0.01 and start_edge_time is not None: # Voltage fixed
-				start_ignore_time = current_time
-				end_ignore_time = current_time
+		measurement_times = np.arange(meas.start_delay, meas.get_total_duration(), meas.sample_interval)
+		sampled_pattern   = np.interp(measurement_times, np.cumsum(self.get_time_pattern()), self.get_voltage_pattern())
+		change_samples    = np.nonzero(np.abs(sampled_pattern[:-1] - sampled_pattern[1:]) > 1e-8)[0]
 
-				if ignore_edges:
-					start_ignore_time = start_edge_time
+		to_ignore = np.array([], dtype=int)
+		if ignore_gnd:
+			gnd_samples = np.nonzero(np.abs(sampled_pattern) < 0.01)[0]
+			to_ignore   = gnd_samples # to copy?
+		if ignore_edges:
+			to_ignore = np.append(to_ignore, change_samples)
+		if ignore_settling:
+			for i in range(len(change_samples)):
+				# Each time a change stops, we ignore the settling time (ie we ignore settling_sample_count samples)
+				if i + 1 == len(change_samples) or abs(change_samples[i] - change_samples[i + 1]) > 1:
+					settle_start = change_samples[i] + 1
+					settle_end = min(settle_start + settling_sample_count, len(measurement_times) - 1)
 
+					to_ignore = np.append(to_ignore, range(settle_start, settle_end)).astype(int)	
 
-				if ignore_settling:
-					end_ignore_time += settling_time
+		to_ignore = np.unique(to_ignore)
 
-				start_ignore_id = meas.get_id_at(start_ignore_time)
-				if end_ignore_time >= meas.get_total_duration():
-					end_ignore_id = meas.get_count()
-				else:
-					end_ignore_id = meas.get_id_at(end_ignore_time) + 1
+		## Adjust start_delay if we should ignore the start because of the params
+		ignored_start_index = 0
+		while ignored_start_index < len(to_ignore) and to_ignore[ignored_start_index] == ignored_start_index:
+			ignored_start_index += 1
 
-				meas.ignore_sample.update(range(
-						start_ignore_id,
-						end_ignore_id
-				))
+		## Adjust duration if start_delay changed and/or if we should ignore the end because of the params
+		ignored_end_index = 1
+		while ignored_end_index < len(to_ignore) and to_ignore[-ignored_end_index] == len(measurement_times) - ignored_end_index:
+			ignored_end_index += 1
+		
+		if ignored_start_index > 0 or ignored_end_index > 1:
+			meas.start_delay += ignored_start_index * meas.sample_interval
+			meas.duration -= (ignored_start_index + ignored_end_index - 1) * meas.sample_interval
 
-				start_edge_time = None				
+			to_ignore = to_ignore[ignored_start_index:-ignored_end_index] - ignored_start_index
 
-			### IGNORE_GND ###
-			if ignore_gnd:
-				if abs(next_v) < 0.01 and abs(v) < 0.01:  
-					# Ignore starting from current point to next one
-					start_ignore_time = current_time 
-					end_ignore_time   = current_time + next_duration
-
-					if end_ignore_time >= meas.get_total_duration() or i == len(self.pattern) - 2: # ... or if it is the second last, we ignore all the end
-						end_ignore_id = meas.get_count()
-					else:
-						end_ignore_id = meas.get_id_at(end_ignore_time) + 1
-
-					meas.ignore_sample.update(range(
-						meas.get_id_at(start_ignore_time),
-						end_ignore_id
-					))
-
-				elif i == 0 and abs(v) < 0.01:
-					# Ignore from the start to current point
-					meas.ignore_sample.update(range(
-						0,
-						meas.get_id_at(current_time) + 1
-					))
+		meas.ignore_sample = to_ignore
 
 		return meas
 
@@ -598,26 +584,39 @@ class Measurement:
 		average_time: float :          Averaging time ;
 		sample_interval: float :       Interval between two measurements ;
 		duration: float :              Duration of the measurement ;
-		ignore_sample: set(int) :      Set of sample indices to ignore when retrieving the measurement ;
+		ignore_sample: np.array(int) : Set of sample indices to ignore when retrieving the measurement ;
 		result: pandas.DataFrame :     Object used to store the results of the measurement ;
 	"""
-	def __init__(self, mode, range, average_time, sample_interval, duration):
-		self.start_delay = 0
+	def __init__(self, mode, range, average_time, sample_interval, start_delay, duration):
+		if mode != 'current' and mode != 'voltage':
+			raise ValueError(f"Unknown specified mode: '{mode}', 'voltage' or 'current' expected")
+
+		self.start_delay = start_delay
 		self.mode = mode
 		self.range = range
 		self.average_time = average_time
 		self.sample_interval = sample_interval
+		self._duration = 0
 		self.duration = duration
-		self.ignore_sample = set()
+		self.ignore_sample = np.array([], dtype=int)
 
 		self.result = pd.DataFrame()
+
+	@property
+	def duration(self):
+		return self._duration
+	@duration.setter
+	def duration(self, new_duration):
+		self._duration = int(new_duration / self.sample_interval) * self.sample_interval # To have a multiple of the sample interval
 
 	def get_id_at(self, time):
 		"""Returns the sample index associated with the time 'time'"""
 		relative_time = time - self.start_delay
 
 		if relative_time > self.duration:
-			raise ValueError("Time greater than duration does not have an id")
+			raise ValueError("Time greater than duration does not have a sample id")
+		elif relative_time < 0:
+			raise ValueError("Time which is not greater than start_delay does not have a sample id")
 
 		return int(relative_time / self.sample_interval)
 
@@ -626,8 +625,8 @@ class Measurement:
 		return int(self.duration / self.sample_interval)
 
 	def get_total_duration(self):
-		"""Returns the total duration (may be different from self.duration because of rounding with self.sample_interval)"""
-		return self.start_delay + self.get_count() * self.sample_interval
+		"""Returns the total duration"""
+		return self.start_delay + self.duration
 
 #############
 # WGFMU Class
