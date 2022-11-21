@@ -71,13 +71,14 @@ class Waveform:
 
 		return copy
 
-	def append_wait_end(self, new_total_duration = None, wait_time = None):
+	def append_wait_end(self, new_total_duration = None, wait_time = None, voltage = None):
 		"""
 		Appends a delay after the waveform.
 
 		Parameters:
 			new_total_duration: float : The new total duration of the waveform, must be greater than current total duration
 			wait_time: float : Delay to append to the waveform
+			voltage: the voltage that the delay should keep [By default, use the voltage of the last pattern point]
 
 		Details:
 			One and only one of new_total_duration or wait_time must be provided
@@ -93,7 +94,8 @@ class Waveform:
 		if delay < 0:
 			raise ValueError("Delay to append is negative")
 
-		self.pattern.append([delay, 0])
+		voltage = voltage or self.pattern[-1][1]
+		self.pattern.append([delay, voltage])
 		return self
 
 	def prepend_wait_begin(self, new_total_duration = None, wait_time = None):
@@ -103,6 +105,7 @@ class Waveform:
 		Parameters:
 			new_total_duration: float : The new total duration of the waveform, must be greater than current total duration
 			wait_time: float : Delay to prepend to the waveform
+			voltage: the voltage that the delay should keep [By default, use the voltage of the first pattern point]
 
 		Details:
 			One and only one of the new_total_duration or wait_time must be provided
@@ -118,7 +121,8 @@ class Waveform:
 		if delay < 0:
 			raise ValueError("Delay to append is negative")
 
-		self.pattern.insert(0, [delay, 0])
+		voltage = voltage or self.pattern[0][1]
+		self.pattern.insert(0, [delay, voltage])
 		return self
 	
 	def measure(self, start_delay = 0, forced_settle_time=None, ignore_gnd=False, ignore_edges=True, ignore_settling=True, **kwargs):
