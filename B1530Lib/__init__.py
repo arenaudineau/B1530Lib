@@ -34,7 +34,7 @@ class Waveform:
 		force_fastiv: bool : Force FastIV pulse mode instead of PG even when no measurement is done [True, by default]
 	"""
 	def __init__(self, pattern = [[0,0]]):
-		self.pattern = pattern
+		self.pattern = cp.deepcopy(pattern)
 		self.force_fastiv = True
 	
 	def append(self, other):
